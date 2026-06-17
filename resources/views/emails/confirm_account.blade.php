@@ -1,5 +1,5 @@
 @php
-    $confirmation_link = 'https://landlord.sublimerent.com.ng/confirm-email/'.$id;
+    $confirmation_link = config('app.url').'/confirm-email/'.$id;
 @endphp
 <!DOCTYPE html>
 <html lang="en">
