@@ -92,11 +92,7 @@
             console.log('Response data:', result);
 
             if (response.ok) {
-                Swal.fire({
-                    title: 'Success',
-                    text: result.message,
-                    icon: 'success',
-                });
+                alert('Success: ' + result.message);
             } else {
                 console.error('Server returned error:', result);
                 errorMessageContainer.textContent = 'Server error: ' + (result.error || 'Unknown error occurred');
