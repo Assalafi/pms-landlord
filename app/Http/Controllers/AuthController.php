@@ -159,33 +159,62 @@ class AuthController extends Controller
     // Send Reset Link Email
     public function sendResetLinkEmail(Request $request)
     {
-        $request->validate(['email' => 'required|email']);
+        try {
+            $request->validate(['email' => 'required|email']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Invalid email format'], 422);
+        }
 
-        $user = User::where('email', $request->email)->first();
+        try {
+            $user = User::where('email', $request->email)->first();
+        } catch (\Exception $e) {
+            \Log::error('Database query failed: ' . $e->getMessage());
+            return response()->json(['error' => 'Database error. Please try again.'], 422);
+        }
         
         if (!$user) {
             return response()->json(['error' => 'Email not found'], 422);
         }
 
         // Delete any existing reset tokens for this user
-        DB::table('password_resets')->where('email', $request->email)->delete();
+        try {
+            DB::table('password_resets')->where('email', $request->email)->delete();
+        } catch (\Exception $e) {
+            \Log::error('Failed to delete existing tokens: ' . $e->getMessage());
+            return response()->json(['error' => 'Database error. Please try again.'], 422);
+        }
 
         // Generate token
-        $token = Str::random(60);
+        try {
+            $token = Str::random(60);
+        } catch (\Exception $e) {
+            \Log::error('Token generation failed: ' . $e->getMessage());
+            return response()->json(['error' => 'Token generation failed. Please try again.'], 422);
+        }
 
         // Store token in password_resets table
-        DB::table('password_resets')->insert([
-            'email' => $request->email,
-            'token' => $token,
-            'created_at' => Carbon::now()
-        ]);
+        try {
+            DB::table('password_resets')->insert([
+                'email' => $request->email,
+                'token' => $token,
+                'created_at' => Carbon::now()
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to store reset token: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to store reset token. Please try again.'], 422);
+        }
 
         // Get user name
-        if ($user->acc_type == 'landlord') {
-            $landlord = Landlord::where('user_id', $user->id)->first();
-            $user_name = $landlord ? $landlord->first_name . ' ' . $landlord->last_name : $user->email;
-        } else {
-            $user_name = $user->email;
+        try {
+            if ($user->acc_type == 'landlord') {
+                $landlord = Landlord::where('user_id', $user->id)->first();
+                $user_name = $landlord ? $landlord->first_name . ' ' . $landlord->last_name : $user->email;
+            } else {
+                $user_name = $user->email;
+            }
+        } catch (\Exception $e) {
+            \Log::error('Failed to get user name: ' . $e->getMessage());
+            $user_name = $user->email; // Fallback to email
         }
 
         // Send email
@@ -193,7 +222,19 @@ class AuthController extends Controller
             Mail::to($request->email)->send(new ForgotPassword($user_name, $token));
             return response()->json(['message' => 'Password reset link sent!'], 200);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to send reset link. Please try again.'], 422);
+            // Log the actual error for debugging
+            \Log::error('Forgot password email failed: ' . $e->getMessage());
+            \Log::error('Email being sent to: ' . $request->email);
+            \Log::error('Error trace: ' . $e->getTraceAsString());
+            
+            // Return more specific error message
+            if (strpos($e->getMessage(), 'connection') !== false) {
+                return response()->json(['error' => 'Mail server connection failed. Please check mail configuration.'], 422);
+            } elseif (strpos($e->getMessage(), 'authentication') !== false) {
+                return response()->json(['error' => 'Mail authentication failed. Please check mail credentials.'], 422);
+            } else {
+                return response()->json(['error' => 'Failed to send reset link: ' . $e->getMessage()], 422);
+            }
         }
     }
 
