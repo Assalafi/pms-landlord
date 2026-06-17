@@ -63,6 +63,7 @@
       </div>
     </div>
   </div>
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <script src="{{ url('assets/libs/jquery/dist/jquery.min.js') }}"></script>
   <script src="{{ url('assets/libs/bootstrap/dist/js/bootstrap.bundle.min.js') }}"></script>
   <script>
@@ -73,6 +74,8 @@
         const errorMessageContainer = document.getElementById('error-message-container');
 
         try {
+            console.log('Sending forgot password request for email:', email);
+            
             const response = await fetch('/forgot-password', {
                 method: 'POST',
                 headers: {
@@ -82,7 +85,11 @@
                 body: JSON.stringify({ email }),
             });
 
+            console.log('Response status:', response.status);
+            console.log('Response headers:', response.headers);
+
             const result = await response.json();
+            console.log('Response data:', result);
 
             if (response.ok) {
                 Swal.fire({
@@ -91,11 +98,13 @@
                     icon: 'success',
                 });
             } else {
-                errorMessageContainer.textContent = result.error || 'An error occurred';
+                console.error('Server returned error:', result);
+                errorMessageContainer.textContent = 'Server error: ' + (result.error || 'Unknown error occurred');
                 errorMessageContainer.style.display = 'block';
             }
         } catch (error) {
-            errorMessageContainer.textContent = 'An unexpected error occurred. Please try again.';
+            console.error('Full error details:', error);
+            errorMessageContainer.textContent = 'Network error: ' + (error.message || 'Unknown error occurred. Please check your connection and try again.');
             errorMessageContainer.style.display = 'block';
         }
     });
