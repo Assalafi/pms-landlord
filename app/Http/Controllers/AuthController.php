@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Mail\ConfirmAccount;
+use App\Mail\ForgotPassword;
 use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Landlord;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class AuthController extends Controller
 {
@@ -158,14 +161,39 @@ class AuthController extends Controller
     {
         $request->validate(['email' => 'required|email']);
 
-        $status = Password::sendResetLink(
-            $request->only('email')
-        );
-
-        if ($status === Password::RESET_LINK_SENT) {
-            return response()->json(['message' => 'Password reset link sent!'], 200);
-        } else {
+        $user = User::where('email', $request->email)->first();
+        
+        if (!$user) {
             return response()->json(['error' => 'Email not found'], 422);
+        }
+
+        // Delete any existing reset tokens for this user
+        DB::table('password_resets')->where('email', $request->email)->delete();
+
+        // Generate token
+        $token = Str::random(60);
+
+        // Store token in password_resets table
+        DB::table('password_resets')->insert([
+            'email' => $request->email,
+            'token' => $token,
+            'created_at' => Carbon::now()
+        ]);
+
+        // Get user name
+        if ($user->acc_type == 'landlord') {
+            $landlord = Landlord::where('user_id', $user->id)->first();
+            $user_name = $landlord ? $landlord->first_name . ' ' . $landlord->last_name : $user->email;
+        } else {
+            $user_name = $user->email;
+        }
+
+        // Send email
+        try {
+            Mail::to($request->email)->send(new ForgotPassword($user_name, $token));
+            return response()->json(['message' => 'Password reset link sent!'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to send reset link. Please try again.'], 422);
         }
     }
 
@@ -184,23 +212,37 @@ class AuthController extends Controller
             'password' => 'required|min:6|confirmed',
         ]);
 
-        $status = Password::reset(
-            $request->only('email', 'password', 'password_confirmation', 'token'),
-            function ($user, $password) {
-                $user->forceFill([
-                    'password' => Hash::make($password),
-                    'status' => 1, // Set status to 1 after resetting password
-                ])->save();
+        // Find the reset token
+        $resetRecord = DB::table('password_resets')
+            ->where('email', $request->email)
+            ->where('token', $request->token)
+            ->first();
 
-                $user->setRememberToken(Str::random(60));
-            }
-        );
-
-        if ($status === Password::PASSWORD_RESET) {
-            return response()->json(['message' => 'Password reset successfully'], 200);
-        } else {
+        if (!$resetRecord) {
             return response()->json(['error' => 'Invalid token'], 422);
         }
+
+        // Check if token is expired (60 minutes)
+        if (Carbon::parse($resetRecord->created_at)->addMinutes(60)->isPast()) {
+            DB::table('password_resets')->where('email', $request->email)->delete();
+            return response()->json(['error' => 'Token has expired'], 422);
+        }
+
+        // Find user and update password
+        $user = User::where('email', $request->email)->first();
+        if (!$user) {
+            return response()->json(['error' => 'User not found'], 422);
+        }
+
+        // Update password
+        $user->password = Hash::make($request->password);
+        $user->status = 1; // Set status to 1 after resetting password
+        $user->save();
+
+        // Delete the reset token
+        DB::table('password_resets')->where('email', $request->email)->delete();
+
+        return response()->json(['message' => 'Password reset successfully'], 200);
     }
 
     public function logout(Request $request)

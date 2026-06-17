@@ -25,7 +25,7 @@
             <p><strong>Temporary Password:</strong> {{ $password }}</p>
         </div>
 
-        <p>You can log in here: <a href="https://landlord.sublimerent.com.ng" style="color: #4CAF50; text-decoration: none;">Landlord Dashboard</a></p>
+        <p>You can log in here: <a href="{{ config('app.url') }}" style="color: #4CAF50; text-decoration: none;">Landlord Dashboard</a></p>
 
         <p>Thank you for joining {{ config('app.name') }}!</p>
 
