@@ -241,7 +241,16 @@ class AuthController extends Controller
     // Show Reset Password Form
     public function showResetPasswordForm($token)
     {
-        return view('reset-password', ['token' => $token]); // Create this view
+        // Get email from token
+        $resetRecord = DB::table('password_resets')
+            ->where('token', $token)
+            ->first();
+            
+        if (!$resetRecord) {
+            return redirect('/forgot-password')->with('error', 'Invalid or expired reset link.');
+        }
+        
+        return view('reset-password', ['token' => $token, 'email' => $resetRecord->email]);
     }
 
     // Reset Password
@@ -249,13 +258,11 @@ class AuthController extends Controller
     {
         $request->validate([
             'token' => 'required',
-            'email' => 'required|email',
             'password' => 'required|min:6|confirmed',
         ]);
 
         // Find the reset token
         $resetRecord = DB::table('password_resets')
-            ->where('email', $request->email)
             ->where('token', $request->token)
             ->first();
 
@@ -265,12 +272,12 @@ class AuthController extends Controller
 
         // Check if token is expired (60 minutes)
         if (Carbon::parse($resetRecord->created_at)->addMinutes(60)->isPast()) {
-            DB::table('password_resets')->where('email', $request->email)->delete();
+            DB::table('password_resets')->where('token', $request->token)->delete();
             return response()->json(['error' => 'Token has expired'], 422);
         }
 
         // Find user and update password
-        $user = User::where('email', $request->email)->first();
+        $user = User::where('email', $resetRecord->email)->first();
         if (!$user) {
             return response()->json(['error' => 'User not found'], 422);
         }
@@ -281,7 +288,7 @@ class AuthController extends Controller
         $user->save();
 
         // Delete the reset token
-        DB::table('password_resets')->where('email', $request->email)->delete();
+        DB::table('password_resets')->where('token', $request->token)->delete();
 
         return response()->json(['message' => 'Password reset successfully'], 200);
     }

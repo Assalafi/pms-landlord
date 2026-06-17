@@ -42,14 +42,22 @@
                     {{ session('success') }}
                   </div>
                 @endif
+                
+                <!-- Display error message -->
+                @if(session('error'))
+                  <div class="alert alert-danger">
+                    {{ session('error') }}
+                  </div>
+                @endif
+                
+                <!-- Show email for reference -->
+                <div class="mb-3">
+                    <p class="text-muted">Resetting password for: <strong>{{ $email }}</strong></p>
+                </div>
                 <!-- Login form -->
                 <form id="reset-password-form" method="POST">
                     @csrf
                     <input type="hidden" name="token" value="{{ $token }}">
-                    <div class="mb-4">
-                        <label for="email" class="block mb-2 text-sm font-medium text-gray-900">Email</label>
-                        <input type="email" id="email" name="email" class="form-control" value="{{ old('email') }}" required>
-                    </div>
                     <div class="mb-4">
                         <label for="password" class="block mb-2 text-sm font-medium text-gray-900">New Password</label>
                         <input type="password" id="password" name="password" class="form-control" required>
@@ -86,13 +94,8 @@
             const result = await response.json();
 
             if (response.ok) {
-                Swal.fire({
-                    title: 'Success',
-                    text: result.message,
-                    icon: 'success',
-                }).then(() => {
-                    window.location.href = '/login'; // Redirect to login page
-                });
+                alert('Success: ' + result.message);
+                window.location.href = '/login'; // Redirect to login page
             } else {
                 errorMessageContainer.textContent = result.error || 'An error occurred';
                 errorMessageContainer.style.display = 'block';
